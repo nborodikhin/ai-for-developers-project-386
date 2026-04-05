@@ -1,8 +1,11 @@
 .PHONY: init clean api-init api-generate \
-        frontend-init frontend-generate-types frontend-lint frontend-dev frontend-build \
+        frontend-init frontend-generate-types frontend-lint frontend-dev frontend-dev-stop frontend-build \
         backend-build backend-run \
         prism prism-stop stop \
         docker-up docker-down
+
+PRISM_PID_FILE := .prism.pid
+DEV_PID_FILE   := .dev.pid
 
 # === Full project ===
 
@@ -39,8 +42,16 @@ frontend-generate-types: frontend-init ## Generate TypeScript types from OpenAPI
 frontend-lint: ## Type-check frontend (no emit)
 	cd frontend && npx tsc --noEmit
 
-frontend-dev: ## Run frontend dev server proxying /api → localhost:4010 (Prism)
-	cd frontend && npm run dev
+frontend-dev: ## Start frontend dev server in background (HMR, no restart needed for code changes)
+	cd frontend && npm run dev & echo $$! > ../$(DEV_PID_FILE)
+
+frontend-dev-stop: ## Stop frontend dev server
+	@if [ -f $(DEV_PID_FILE) ]; then \
+	  kill $$(cat $(DEV_PID_FILE)) 2>/dev/null && echo "Dev server stopped"; \
+	  rm -f $(DEV_PID_FILE); \
+	else \
+	  echo "No dev server PID file found"; \
+	fi
 
 frontend-build: frontend-generate-types ## Build frontend for production
 	cd frontend && npm run build
@@ -55,13 +66,18 @@ backend-run: ## Run backend locally (localhost:8080)
 
 # === Dev services ===
 
-prism: ## Start Prism mock server on port 4010
-	npx @stoplight/prism-cli mock api/generated/@typespec/openapi3/openapi.yaml --port 4010 &
+prism: ## Start Prism mock server on port 4010 in background
+	npx @stoplight/prism-cli mock api/generated/@typespec/openapi3/openapi.yaml --port 4010 & echo $$! > $(PRISM_PID_FILE)
 
 prism-stop: ## Stop Prism mock server
-	pkill -f "prism-cli mock" || true
+	@if [ -f $(PRISM_PID_FILE) ]; then \
+	  kill $$(cat $(PRISM_PID_FILE)) 2>/dev/null && echo "Prism stopped"; \
+	  rm -f $(PRISM_PID_FILE); \
+	else \
+	  echo "No Prism PID file found"; \
+	fi
 
-stop: prism-stop ## Stop all local dev processes (Prism + backend)
+stop: prism-stop frontend-dev-stop ## Stop all local dev processes (Prism + frontend + backend)
 	pkill -f "gradlew bootRun" || true
 	pkill -f "spring-boot" || true
 
