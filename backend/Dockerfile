@@ -15,7 +15,7 @@ RUN ./gradlew dependencies --no-daemon 2>/dev/null || true
 
 # Copy source and build
 COPY backend/src ./src
-RUN ./gradlew bootJar --no-daemon -DsopenApiSpecPath=/api-spec/openapi.yaml
+RUN ./gradlew bootJar --no-daemon -DopenApiSpecPath=/api-spec/openapi.yaml
 
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app

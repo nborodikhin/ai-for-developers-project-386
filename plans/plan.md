@@ -184,7 +184,7 @@ COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 ---
 
-## Phase 3: Backend (Kotlin + Spring Boot)
+## Phase 3: Backend (Kotlin + Spring Boot) ✅
 
 ### Step 0: Add `@tag` to TypeSpec routes
 
@@ -417,7 +417,7 @@ curl -s -o /dev/null -w "%{http_code}" -X POST localhost:8080/api/event-types/1/
 
 ---
 
-## Phase 4: Docker
+## Phase 4: Docker ✅
 
 ### `backend/Dockerfile`
 ```dockerfile
