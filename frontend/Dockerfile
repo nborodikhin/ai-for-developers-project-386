@@ -13,4 +13,7 @@ RUN npm run build
 
 FROM nginx:1.25-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf.template
+ENV BACKEND_SCHEME=http
+ENV BACKEND_HOST=backend:8080
+CMD ["/bin/sh", "-c", "envsubst '${BACKEND_SCHEME} ${BACKEND_HOST}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
