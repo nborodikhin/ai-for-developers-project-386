@@ -29,7 +29,7 @@ Educational Hexlet project. A calendar booking app where one owner creates event
 
 ---
 
-## Phase 1: TypeSpec API Definition
+## Phase 1: TypeSpec API Definition ✅
 
 ### Code generation notes
 - TypeSpec compiles to OpenAPI YAML — that's the contract
@@ -76,36 +76,111 @@ Educational Hexlet project. A calendar booking app where one owner creates event
 - `api/package.json`, `api/tspconfig.yaml`, `api/main.tsp`, `api/models.tsp`, `api/routes.tsp`
 
 ### Verify
-- `cd api && npx tsp compile .` succeeds, `generated/openapi.yaml` has all endpoints
+- `make api-generate` succeeds, `api/generated/@typespec/openapi3/openapi.yaml` has all endpoints
 
 ---
 
 ## Phase 2: Frontend (React + TypeScript + Vite)
 
-Build UI first with hardcoded stub data, then wire up real API later.
+Use real API from the start via Prism mock server (reads openapi.yaml, returns realistic responses). No hand-written stubs.
+
+### Directory structure
+```
+frontend/
+├── package.json, tsconfig.json, vite.config.ts, index.html
+├── Dockerfile, nginx.conf, .gitignore
+└── src/
+    ├── main.tsx                   # MantineProvider + RouterProvider
+    ├── App.tsx                    # Route definitions
+    ├── api/
+    │   ├── types.ts               # Re-exports from generated/ with readable aliases
+    │   ├── client.ts              # apiFetch<T> wrapper (throws ApiError on non-2xx)
+    │   ├── eventTypes.ts          # listEventTypes, getEventType, createEventType, etc.
+    │   ├── bookings.ts            # listBookings, createBooking, updateBooking, deleteBooking
+    │   ├── slots.ts               # getAvailableSlots(eventTypeId, date)
+    │   └── index.ts               # Re-exports from all api modules
+    ├── components/
+    │   ├── Navbar.tsx             # AppShell.Header + "Записаться"/"Админка" links
+    │   ├── EventTypeCard.tsx      # Card with name, description, duration Badge
+    │   ├── CalendarPicker.tsx     # @mantine/dates Calendar, minDate=today
+    │   ├── SlotList.tsx           # Slots with "Свободен"/"Занят" badges + confirm button
+    │   ├── BookingForm.tsx        # Name, email, comment inputs + submit
+    │   └── EventInfoPanel.tsx     # Left panel: event name, host, duration, selected date/time
+    ├── pages/
+    │   ├── HomePage.tsx           # Gradient hero + features card
+    │   ├── BookCatalogPage.tsx    # Host profile + SimpleGrid of EventTypeCards
+    │   ├── BookEventPage.tsx      # 3-column Grid layout (most complex)
+    │   └── AdminPage.tsx          # Tabs: event type CRUD + upcoming bookings table
+    ├── hooks/
+    │   ├── useEventTypes.ts       # { data, loading, error } pattern
+    │   ├── useEventType.ts
+    │   ├── useAvailableSlots.ts   # refetches when (eventTypeId, date) changes
+    │   └── useBookings.ts
+    └── generated/
+        └── api.ts                 # openapi-typescript output (gitignored, generated at build time)
+```
+
+### API during development — Prism mock server
+No hand-written stubs. Instead, use [Prism](https://stoplight.io/open-source/prism) — an OpenAPI mock server that auto-generates realistic responses from `openapi.yaml`.
+
+```
+make prism          # starts Prism on port 4010
+make frontend-dev   # Vite proxies /api → localhost:4010
+```
+
+When backend is ready, `make frontend-dev` proxies `/api` → `localhost:8080` instead — no code changes needed.
 
 ### TypeScript types
-- Auto-generated from OpenAPI spec via `openapi-typescript`
+`src/api/types.ts` aliases `components['schemas']['X']` from the generated file — isolates the rest of the codebase from generated naming conventions.
+Generated via: `npm run generate-types` → `openapi-typescript ../api/generated/@typespec/openapi3/openapi.yaml -o src/generated/api.ts`
 
-### Pages (from UI screenshots)
-1. **HomePage** (`/`) — hero with gradient, "Записаться" CTA → `/book`
-2. **BookCatalogPage** (`/book`) — host profile + event type cards grid
-3. **BookEventPage** (`/book/:id`) — 3-panel: event info | calendar picker | time slots + booking form
-4. **AdminPage** (`/admin`) — event type CRUD + upcoming bookings list
+### Key Mantine components used
+- **HomePage**: `Box` (gradient bg), `Grid`, `Title`, `Button`, `Card`, `List`
+- **BookCatalogPage**: `Avatar`, `SimpleGrid`, `EventTypeCard` with `Badge` for duration
+- **BookEventPage**: `Grid` 3-col, `@mantine/dates Calendar`, `ScrollArea`, `Badge` (green/red), `TextInput`, `Textarea`
+- **AdminPage**: `Tabs`, `Table`, `Modal`, `NumberInput`
 
-### Components
-- Navbar ("Calendar" logo, "Записаться"/"Админка" links)
-- EventTypeCard, CalendarPicker, SlotButton, BookingForm
+### BookEventPage state machine
+```
+selectedDate → fetch slots → selectedSlot (free only) → show BookingForm → submit → success notification
+```
+State: `{ selectedDate, slots, selectedSlot, loadingSlots }` — all local `useState`.
 
-### Stub API layer
-- `src/api/` — functions that return hardcoded data initially, swapped for real fetch calls later
+### Docker (multi-stage, repo-root context)
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY api/generated/.../openapi.yaml /api-spec/openapi.yaml
+COPY frontend/package*.json ./
+RUN npm ci && npx openapi-typescript /api-spec/openapi.yaml -o src/generated/api.ts
+COPY frontend/ .
+RUN npm run build
 
-### Styling
-- Mantine UI component library (Card, Button, Calendar, etc.) to match the mockup design
+FROM nginx:1.25-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+```
+`docker-compose.yml` sets `context: .` (repo root), `dockerfile: frontend/Dockerfile`.
+
+### Nginx
+- `location /api/` → `proxy_pass http://backend:8080` (preserves `/api/` prefix)
+- `location /` → `try_files $uri $uri/ /index.html` (SPA routing)
+
+### New Makefile targets
+- `frontend-generate-types` — run `npm run generate-types` in frontend/
+- `frontend-lint` — `tsc --noEmit`
+- `prism` — start Prism mock server on port 4010 from `api/generated/.../openapi.yaml`
+- `prism-stop` — stop the Prism mock server process
+- `stop` — stop all local dev processes (Prism + backend Spring Boot)
+- Update `init` to depend on `api-generate frontend-generate-types`
+- `frontend-dev` proxies `/api` to `localhost:4010` (Prism) during development; switch to `localhost:8080` once backend is ready
 
 ### Verify
-- `cd frontend && npm run build` succeeds
-- Pages render with stub data, navigation works
+- `make frontend-build` succeeds, zero TypeScript errors
+- `make frontend-dev` (with `make prism` running): all 4 pages render correctly with Prism-generated mock data
+- `/book/:id` — date selection fetches slots, free slot click enables form, submit shows success notification
+- `/admin` — event type table and bookings table render
+- `docker compose build frontend` succeeds, `curl localhost:3000` returns index.html
 
 ---
 
