@@ -4,6 +4,7 @@ using TypeSpec.Rest;
 namespace CalendarApi;
 
 @route("/api/event-types")
+@tag("EventTypes")
 interface EventTypes {
   @post
   @doc("Create a new event type")
@@ -50,6 +51,7 @@ interface EventTypes {
 }
 
 @route("/api/event-types/{eventTypeId}/bookings")
+@tag("EventTypeBookings")
 interface EventTypeBookings {
   @post
   @doc("Create a booking for an event type")
@@ -66,6 +68,7 @@ interface EventTypeBookings {
 }
 
 @route("/api/event-types/{eventTypeId}/available-slots")
+@tag("AvailableSlots")
 interface AvailableSlots {
   @get
   @doc("Get available time slots for a given date")
@@ -79,6 +82,7 @@ interface AvailableSlots {
 }
 
 @route("/api/bookings")
+@tag("Bookings")
 interface Bookings {
   @get
   @doc("List bookings. Without email: all upcoming (owner view). With email: guest's bookings.")

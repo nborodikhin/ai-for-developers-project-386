@@ -186,58 +186,287 @@ COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 ## Phase 3: Backend (Kotlin + Spring Boot)
 
-### Auto-generated code (from OpenAPI via openapi-generator Gradle plugin)
-- **Controller interfaces**: `EventTypeApi`, `BookingApi`, `SlotApi` — define all routes, params, status codes
-- **Data classes**: `EventType`, `Booking`, `CreateEventTypeRequest`, etc.
-- We implement the interfaces and write only business logic
+### Step 0: Add `@tag` to TypeSpec routes
 
-### DB (Exposed, SQLite in-memory)
-- Connection: `jdbc:sqlite::memory:` — no file, no volume, data resets on restart
-- Tables created on startup via Exposed's `SchemaUtils.create()`
-- **EventTypes**: id (autoincrement), name, description, durationMinutes, deleted (boolean, default false)
-- **Bookings**: id (autoincrement), eventTypeId (FK), guestName, guestEmail, comment, startTime (ISO-8601), endTime (ISO-8601)
+The current OpenAPI spec has `tags: []` and no per-operation tags — the generator would put everything in `DefaultApi`. Fix by adding `@tag` to each interface in `api/routes.tsp`:
 
-### Key Business Logic
-- **Conflict check**: `WHERE startTime < :newEnd AND endTime > :newStart` across ALL bookings. 409 if any overlap.
-- **Slot generation**: working hours 09:00–18:00 (hardcoded constant). Generate slots in `durationMinutes` increments. Check each against all existing bookings for availability.
-- All times in UTC.
+```typespec
+@tag("EventTypes")        interface EventTypes        { ... }
+@tag("EventTypeBookings") interface EventTypeBookings { ... }
+@tag("AvailableSlots")    interface AvailableSlots    { ... }
+@tag("Bookings")          interface Bookings          { ... }
+```
+
+Then run `make api-generate` + `make frontend-generate-types` to update the spec and regenerate frontend types.
 
 ### File Layout
 ```
 backend/
-  build.gradle.kts          # openapi-generator plugin + Spring Boot deps
+  build.gradle.kts
+  settings.gradle.kts
+  gradle/wrapper/gradle-wrapper.properties + gradlew + gradlew.bat
+  Dockerfile
   src/main/kotlin/com/calendar/
-    Application.kt           # @SpringBootApplication entry point
+    Application.kt
     controllers/
-      EventTypeController.kt # implements generated EventTypeApi
-      BookingController.kt   # implements generated BookingApi
-      SlotController.kt      # implements generated SlotApi
-    db/{DatabaseFactory,Tables}.kt
-    services/{EventTypeService,BookingService,SlotService}.kt
-  build/generate-resources/  # auto-generated interfaces + models (not committed)
+      EventTypeController.kt      # implements EventTypesApi
+      BookingController.kt        # implements BookingsApi + EventTypeBookingsApi
+      SlotController.kt           # implements AvailableSlotsApi
+      GlobalExceptionHandler.kt   # @RestControllerAdvice — maps ConflictException → 409
+    db/
+      Tables.kt                   # Exposed Table objects
+      DatabaseFactory.kt          # @PostConstruct: Database.connect + SchemaUtils.create
+    services/
+      EventTypeService.kt
+      BookingService.kt           # throws ConflictException on overlap
+      SlotService.kt
+  src/main/resources/
+    application.properties
 ```
 
-### Verify
-- `cd backend && ./gradlew build` compiles (codegen + compile)
-- Endpoints return correct responses (manual curl or Spring test)
+### `settings.gradle.kts`
+```kotlin
+rootProject.name = "calendar-backend"
+```
+
+### `build.gradle.kts` — key sections
+```kotlin
+plugins {
+    id("org.springframework.boot") version "3.2.4"
+    id("io.spring.dependency-management") version "1.1.4"
+    kotlin("jvm") version "1.9.23"
+    kotlin("plugin.spring") version "1.9.23"
+    id("org.openapi.generator") version "7.4.0"
+}
+
+openApiGenerate {
+    generatorName.set("kotlin-spring")
+    // System property allows Dockerfile to override path without code changes
+    inputSpec.set(System.getProperty("openApiSpecPath",
+        "$rootDir/../api/generated/@typespec/openapi3/openapi.yaml"))
+    outputDir.set("${layout.buildDirectory.get()}/generate-resources/main")
+    apiPackage.set("com.calendar.generated.api")
+    modelPackage.set("com.calendar.generated.model")
+    configOptions.set(mapOf(
+        "interfaceOnly"        to "true",
+        "useSpringBoot3"       to "true",
+        "useTags"              to "true",
+        "dateLibrary"          to "java8",
+        "serializationLibrary" to "jackson"
+    ))
+    generateModelTests.set(false); generateApiTests.set(false)
+    generateModelDocumentation.set(false); generateApiDocumentation.set(false)
+}
+
+sourceSets { main { kotlin {
+    srcDir("${layout.buildDirectory.get()}/generate-resources/main/src/main/kotlin")
+}}}
+
+tasks.withType<KotlinCompile> {
+    dependsOn("openApiGenerate")
+    kotlinOptions { freeCompilerArgs += "-Xjsr305=strict"; jvmTarget = "17" }
+}
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")  // OffsetDateTime serialization
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+    val exposedVersion = "0.49.0"
+    implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-dao:$exposedVersion")
+    implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
+    implementation("org.xerial:sqlite-jdbc:3.45.2.0")
+    // Required by generated code
+    implementation("io.swagger.core.v3:swagger-annotations:2.2.20")
+    implementation("jakarta.validation:jakarta.validation-api:3.0.2")
+    implementation("jakarta.annotation:jakarta.annotation-api:2.1.1")
+}
+```
+
+### `application.properties`
+```properties
+server.port=8080
+spring.datasource.url=jdbc:sqlite::memory:
+spring.datasource.driver-class-name=org.sqlite.JDBC
+spring.jackson.serialization.write-dates-as-timestamps=false
+spring.jackson.time-zone=UTC
+# Disable Spring's DataSource/JPA autoconfiguration — Exposed manages DB directly
+spring.autoconfigure.exclude=\
+  org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,\
+  org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+```
+
+### DB Layer
+
+**`db/Tables.kt`**
+```kotlin
+object EventTypes : Table("event_types") {
+    val id              = long("id").autoIncrement()
+    val name            = varchar("name", 255)
+    val description     = text("description")
+    val durationMinutes = integer("duration_minutes")
+    val deleted         = bool("deleted").default(false)
+    override val primaryKey = PrimaryKey(id)
+}
+object Bookings : Table("bookings") {
+    val id            = long("id").autoIncrement()
+    val eventTypeId   = long("event_type_id").references(EventTypes.id)
+    val eventTypeName = varchar("event_type_name", 255)   // denormalized
+    val guestName     = varchar("guest_name", 255)
+    val guestEmail    = varchar("guest_email", 255)
+    val comment       = text("comment").nullable()
+    val startTime     = varchar("start_time", 50)         // ISO-8601 UTC string
+    val endTime       = varchar("end_time", 50)
+    override val primaryKey = PrimaryKey(id)
+}
+```
+
+Times as ISO-8601 varchar: lexicographic sort = chronological order for UTC strings → SQL `<`/`>` comparisons work for conflict detection.
+
+**`db/DatabaseFactory.kt`** — `@Component` with `@PostConstruct`:
+```kotlin
+Database.connect("jdbc:sqlite::memory:", "org.sqlite.JDBC")
+transaction { SchemaUtils.create(EventTypes, Bookings) }
+```
+Single `Database.connect()` — no pool, Exposed reuses the same connection for in-memory SQLite.
+
+### Services
+
+**`EventTypeService`**
+- `create(req)` → `EventTypes.insert { }` → return EventType
+- `list()` → `EventTypes.select { deleted eq false }`
+- `findById(id)` → select WHERE id AND NOT deleted, returns `null` if missing
+- `update(id, req)` → `EventTypes.update(where = { id eq x AND NOT deleted })`, returns `null` if 0 rows
+- `softDelete(id)` → UPDATE SET deleted=true, returns `false` if 0 rows
+
+**`BookingService`**
+- `create(eventTypeId, req)`:
+  1. Load EventType → return `null` if not found
+  2. `endTime = req.startTime + durationMinutes` (OffsetDateTime arithmetic)
+  3. Conflict check (scoped to same eventTypeId):
+     `SELECT COUNT WHERE eventTypeId=x AND startTime < newEnd AND endTime > newStart`
+     → throw `ConflictException` if count > 0
+  4. INSERT with denormalized `eventTypeName`; return Booking
+- `list(email?)` → SELECT all or WHERE guestEmail=email
+- `update(id, req)` → UPDATE only non-null fields (guestName, comment); returns `null` if not found
+- `delete(id)` → DELETE; returns `false` if 0 rows
+
+**`SlotService`**
+- `getSlots(eventTypeId, date)`:
+  1. Load EventType → return `null` if not found
+  2. `dayStart = date@09:00Z`, `dayEnd = date@18:00Z`
+  3. Load existing bookings for this eventType overlapping the day
+  4. Walk cursor from dayStart to dayEnd in `durationMinutes` steps
+  5. Each slot: `available = no existing booking overlaps [cursor, cursor+duration)`
+  6. Stop when `cursor + durationMinutes > dayEnd`
+
+### Controllers
+
+Controllers implement generated interfaces — Spring picks up all `@RequestMapping` annotations from the interface, so **don't re-declare** them on overriding methods.
+
+- `EventTypeController : EventTypesApi` → delegates to EventTypeService, returns 404 on null
+- `BookingController : BookingsApi, EventTypeBookingsApi` → delegates to BookingService, relies on GlobalExceptionHandler for 409
+- `SlotController : AvailableSlotsApi` → delegates to SlotService, returns 404 on null
+
+**`GlobalExceptionHandler`** (`@RestControllerAdvice`):
+```kotlin
+@ExceptionHandler(ConflictException::class)
+fun handleConflict(ex: ConflictException) =
+    ResponseEntity.status(409).body(ErrorResponse(ex.message ?: "Conflict"))
+```
+
+### Implementation Sequence
+
+1. Add `@tag` to `api/routes.tsp` → `make api-generate` → `make frontend-generate-types`
+2. Create `backend/settings.gradle.kts`
+3. Create `backend/build.gradle.kts`
+4. Init Gradle wrapper: `cd backend && gradle wrapper --gradle-version 8.7`
+5. Create `application.properties`, `Application.kt`
+6. Create `db/Tables.kt`, `db/DatabaseFactory.kt`
+7. Run `./gradlew openApiGenerate` → **inspect** `build/generate-resources/main/.../api/` for actual interface names
+8. Create 3 service classes + `ConflictException`
+9. Create 3 controllers + `GlobalExceptionHandler`
+10. `make backend-build` — fix any compilation errors
+11. `make backend-run` + smoke-test with curl (see Verify below)
+12. Create `backend/Dockerfile`
+13. Create `docker-compose.yml` at repo root
+14. `make docker-up` — full end-to-end test
+
+### Verify (local)
+```bash
+# Create event type
+curl -s -X POST localhost:8080/api/event-types \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"15-min call","description":"Quick sync","durationMinutes":15}'
+
+# List slots
+curl -s 'localhost:8080/api/event-types/1/available-slots?date=2026-04-10'
+
+# Book a slot
+curl -s -X POST localhost:8080/api/event-types/1/bookings \
+  -H 'Content-Type: application/json' \
+  -d '{"guestName":"Alice","guestEmail":"alice@example.com","startTime":"2026-04-10T09:00:00Z"}'
+
+# Verify conflict → must return 409
+curl -s -o /dev/null -w "%{http_code}" -X POST localhost:8080/api/event-types/1/bookings \
+  -H 'Content-Type: application/json' \
+  -d '{"guestName":"Bob","guestEmail":"bob@example.com","startTime":"2026-04-10T09:00:00Z"}'
+```
 
 ---
 
 ## Phase 4: Docker
 
-### docker-compose.yml
-- **backend**: builds `./backend`, exposes 8080 internally (no volume needed — in-memory DB)
-- **frontend**: builds `./frontend`, maps port `3000:80`, depends on backend
+### `backend/Dockerfile`
+```dockerfile
+FROM eclipse-temurin:17-jdk-alpine AS builder
+WORKDIR /workspace
+COPY api/generated/@typespec/openapi3/openapi.yaml /api-spec/openapi.yaml
+COPY backend/gradlew backend/gradlew.bat ./
+COPY backend/gradle ./gradle
+COPY backend/build.gradle.kts backend/settings.gradle.kts ./
+RUN chmod +x gradlew
+RUN ./gradlew dependencies --no-daemon 2>/dev/null || true
+COPY backend/src ./src
+RUN ./gradlew bootJar --no-daemon -DsopenApiSpecPath=/api-spec/openapi.yaml
 
-### Nginx (frontend/nginx.conf)
-- `location /` → static files with `try_files $uri /index.html` (SPA)
-- `location /api/` → proxy to `http://backend:8080`
+FROM eclipse-temurin:17-jre-alpine
+WORKDIR /app
+COPY --from=builder /workspace/build/libs/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
 
-Single entry point: `http://localhost:3000`
+Build context is repo root so both `api/` and `backend/` are accessible.
+
+### `docker-compose.yml` (repo root)
+```yaml
+version: "3.9"
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: on-failure
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: on-failure
+```
+
+`frontend/nginx.conf` already has `proxy_pass http://backend:8080` — service name matches.
 
 ### Verify
-- `docker compose up --build` starts without errors
-- App accessible at localhost:3000
+- `make docker-up` starts without errors
+- `http://localhost:3000` — full app with real backend, no Prism
 
 ---
 

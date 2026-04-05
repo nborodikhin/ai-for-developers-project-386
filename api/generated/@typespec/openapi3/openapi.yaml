@@ -2,7 +2,11 @@ openapi: 3.0.0
 info:
   title: Calendar Booking API
   version: 1.0.0
-tags: []
+tags:
+  - name: EventTypes
+  - name: EventTypeBookings
+  - name: AvailableSlots
+  - name: Bookings
 paths:
   /api/bookings:
     get:
@@ -24,6 +28,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Booking'
+      tags:
+        - Bookings
   /api/bookings/{id}:
     put:
       operationId: Bookings_update
@@ -48,6 +54,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      tags:
+        - Bookings
       requestBody:
         required: true
         content:
@@ -73,6 +81,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      tags:
+        - Bookings
   /api/event-types:
     post:
       operationId: EventTypes_create
@@ -85,6 +95,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EventType'
+      tags:
+        - EventTypes
       requestBody:
         required: true
         content:
@@ -104,6 +116,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/EventType'
+      tags:
+        - EventTypes
   /api/event-types/{eventTypeId}/available-slots:
     get:
       operationId: AvailableSlots_list
@@ -137,6 +151,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      tags:
+        - AvailableSlots
   /api/event-types/{eventTypeId}/bookings:
     post:
       operationId: EventTypeBookings_create
@@ -167,6 +183,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      tags:
+        - EventTypeBookings
       requestBody:
         required: true
         content:
@@ -197,6 +215,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      tags:
+        - EventTypes
     put:
       operationId: EventTypes_update
       description: Update an event type
@@ -220,6 +240,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      tags:
+        - EventTypes
       requestBody:
         required: true
         content:
@@ -245,6 +267,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+      tags:
+        - EventTypes
 components:
   schemas:
     AvailableSlot:

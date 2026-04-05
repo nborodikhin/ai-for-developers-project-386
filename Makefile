@@ -1,11 +1,12 @@
 .PHONY: init clean api-init api-generate \
         frontend-init frontend-generate-types frontend-lint frontend-dev frontend-dev-stop frontend-build \
-        backend-build backend-run \
+        backend-generate backend-build backend-run backend-run-stop \
         prism prism-stop stop \
         docker-up docker-down
 
-PRISM_PID_FILE := .prism.pid
-DEV_PID_FILE   := .dev.pid
+PRISM_PID_FILE   := .prism.pid
+DEV_PID_FILE     := .dev.pid
+BACKEND_PID_FILE := .backend.pid
 
 # === Full project ===
 
@@ -58,11 +59,22 @@ frontend-build: frontend-generate-types ## Build frontend for production
 
 # === Backend ===
 
-backend-build: ## Build backend (codegen + compile)
+backend-generate: ## Run openapi-generator only (produces interfaces under backend/build/)
+	cd backend && ./gradlew openApiGenerate
+
+backend-build: ## Build backend (codegen + compile + test)
 	cd backend && ./gradlew build
 
-backend-run: ## Run backend locally (localhost:8080)
-	cd backend && ./gradlew bootRun
+backend-run: ## Start backend in background (localhost:8082, avoids conflict with syncthing on 8080)
+	cd backend && ./gradlew bootRun --args='--server.port=8082' & echo $$! > ../$(BACKEND_PID_FILE)
+
+backend-run-stop: ## Stop background backend process
+	@if [ -f $(BACKEND_PID_FILE) ]; then \
+	  kill $$(cat $(BACKEND_PID_FILE)) 2>/dev/null && echo "Backend stopped"; \
+	  rm -f $(BACKEND_PID_FILE); \
+	else \
+	  echo "No backend PID file found"; \
+	fi
 
 # === Dev services ===
 
@@ -77,9 +89,7 @@ prism-stop: ## Stop Prism mock server
 	  echo "No Prism PID file found"; \
 	fi
 
-stop: prism-stop frontend-dev-stop ## Stop all local dev processes (Prism + frontend + backend)
-	pkill -f "gradlew bootRun" || true
-	pkill -f "spring-boot" || true
+stop: prism-stop frontend-dev-stop backend-run-stop ## Stop all local dev processes
 
 # === Help ===
 
