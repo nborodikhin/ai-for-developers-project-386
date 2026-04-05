@@ -35,6 +35,9 @@ Educational Hexlet project. A calendar booking app where one owner creates event
 - TypeSpec compiles to OpenAPI YAML — that's the contract
 - **Frontend**: auto-generate TypeScript types from OpenAPI via `openapi-typescript`
 - **Backend (Spring Boot)**: auto-generate controller interfaces + data classes from OpenAPI via `openapi-generator` Gradle plugin. We only implement the business logic.
+- Both backend and frontend reference `../api/generated/openapi.yaml` directly — no copying, single source of truth
+- Build order: `api` first (generates OpenAPI), then backend/frontend (consume it)
+- Docker: build context is repo root so all dirs are accessible
 
 ### Models
 - **EventType**: `id: int64`, `name`, `description`, `durationMinutes: int32`
