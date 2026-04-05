@@ -16,8 +16,7 @@ services:
     envVars:
       - key: BACKEND_SCHEME
         value: https
+      # Free-tier services don't have private networking; use full external hostname.
+      # Update this value if the backend service is recreated with a new slug.
       - key: BACKEND_HOST
-        fromService:
-          name: calendar-backend
-          type: web
-          property: host
+        value: calendar-backend-3vu4.onrender.com
