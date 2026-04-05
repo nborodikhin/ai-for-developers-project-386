@@ -80,7 +80,7 @@ Educational Hexlet project. A calendar booking app where one owner creates event
 
 ---
 
-## Phase 2: Frontend (React + TypeScript + Vite)
+## Phase 2: Frontend (React + TypeScript + Vite) ✅
 
 Use real API from the start via Prism mock server (reads openapi.yaml, returns realistic responses). No hand-written stubs.
 
