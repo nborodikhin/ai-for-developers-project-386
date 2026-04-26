@@ -81,6 +81,24 @@ interface AvailableSlots {
   };
 }
 
+@route("/api/settings")
+@tag("Settings")
+interface Settings {
+  @get
+  @doc("Get current owner settings")
+  get(): {
+    @statusCode statusCode: 200;
+    @body body: OwnerSettings;
+  };
+
+  @put
+  @doc("Update owner timezone")
+  updateTimezone(@body body: UpdateTimezoneRequest): {
+    @statusCode statusCode: 200;
+    @body body: OwnerSettings;
+  };
+}
+
 @route("/api/bookings")
 @tag("Bookings")
 interface Bookings {

@@ -3,3 +3,4 @@ export * from './client';
 export * from './eventTypes';
 export * from './bookings';
 export * from './slots';
+export * from './settings';

@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Container, Title, Tabs, Table, Button, Group, Text, Modal, Stack,
-  TextInput, Textarea, NumberInput, Alert, Loader, Center, ActionIcon, Badge,
+  TextInput, Textarea, NumberInput, Alert, Loader, Center, ActionIcon, Badge, Paper,
 } from '@mantine/core';
 import { IconEdit, IconTrash, IconPlus } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useEventTypes } from '../hooks/useEventTypes';
 import { useBookings } from '../hooks/useBookings';
-import { createEventType, updateEventType, deleteEventType } from '../api';
+import { createEventType, updateEventType, deleteEventType, getSettings, updateTimezone } from '../api';
 import type { EventType, CreateEventTypeRequest } from '../api';
-import dayjs from 'dayjs';
+import dayjs from '../lib/dayjs';
+import { TimezonePicker } from '../components/TimezonePicker';
 
 function EventTypeModal({
   opened,
@@ -99,6 +100,13 @@ export function AdminPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<EventType | null>(null);
 
+  const [ownerTimezone, setOwnerTimezone] = useState<string>('UTC');
+  const [tzSaving, setTzSaving] = useState(false);
+
+  useEffect(() => {
+    getSettings().then((s) => setOwnerTimezone(s.ownerTimezone)).catch(() => {});
+  }, []);
+
   function openCreate() {
     setEditTarget(null);
     setModalOpen(true);
@@ -120,9 +128,32 @@ export function AdminPage() {
     }
   }
 
+  async function handleTimezoneChange(tz: string) {
+    setOwnerTimezone(tz);
+    setTzSaving(true);
+    try {
+      await updateTimezone(tz);
+      notifications.show({ message: 'Часовой пояс обновлён', color: 'green' });
+    } catch {
+      notifications.show({ title: 'Ошибка', message: 'Не удалось обновить часовой пояс', color: 'red' });
+    } finally {
+      setTzSaving(false);
+    }
+  }
+
   return (
     <Container size="lg" py="xl">
       <Title order={2} mb="xl">Админка</Title>
+
+      <Paper withBorder p="md" radius="md" mb="xl">
+        <Title order={4} mb="sm">Настройки</Title>
+        <TimezonePicker
+          value={ownerTimezone}
+          onChange={handleTimezoneChange}
+          label="Часовой пояс владельца (рабочее время 09:00–18:00 в этом поясе)"
+          disabled={tzSaving}
+        />
+      </Paper>
 
       <Tabs defaultValue="event-types">
         <Tabs.List mb="lg">
@@ -197,7 +228,7 @@ export function AdminPage() {
                   <Table.Th>Гость</Table.Th>
                   <Table.Th>Email</Table.Th>
                   <Table.Th>Тип события</Table.Th>
-                  <Table.Th>Начало</Table.Th>
+                  <Table.Th>Начало ({ownerTimezone})</Table.Th>
                   <Table.Th>Конец</Table.Th>
                   <Table.Th>Комментарий</Table.Th>
                 </Table.Tr>
@@ -208,8 +239,8 @@ export function AdminPage() {
                     <Table.Td>{b.guestName}</Table.Td>
                     <Table.Td>{b.guestEmail}</Table.Td>
                     <Table.Td>{b.eventTypeName}</Table.Td>
-                    <Table.Td>{dayjs(b.startTime).format('DD.MM.YYYY HH:mm')}</Table.Td>
-                    <Table.Td>{dayjs(b.endTime).format('HH:mm')}</Table.Td>
+                    <Table.Td>{dayjs(b.startTime).tz(ownerTimezone).format('DD.MM.YYYY HH:mm')}</Table.Td>
+                    <Table.Td>{dayjs(b.endTime).tz(ownerTimezone).format('HH:mm')}</Table.Td>
                     <Table.Td>
                       <Text size="sm" c="dimmed">{b.comment ?? '—'}</Text>
                     </Table.Td>

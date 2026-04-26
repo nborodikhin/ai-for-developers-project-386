@@ -5,6 +5,8 @@ import com.zaxxer.hikari.HikariDataSource
 import jakarta.annotation.PostConstruct
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.springframework.stereotype.Component
 
@@ -21,7 +23,10 @@ class DatabaseFactory {
         }
         Database.connect(HikariDataSource(config))
         transaction {
-            SchemaUtils.create(EventTypes, Bookings)
+            SchemaUtils.create(EventTypes, Bookings, Settings)
+            if (Settings.selectAll().count() == 0L) {
+                Settings.insert { it[timezone] = "UTC" }
+            }
         }
     }
 }

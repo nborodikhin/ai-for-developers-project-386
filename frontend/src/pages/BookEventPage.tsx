@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container, Grid, Title, Text, Loader, Center, Alert, Paper, Button, Stack,
 } from '@mantine/core';
-import dayjs from 'dayjs';
+import dayjs from '../lib/dayjs';
 import 'dayjs/locale/ru';
 import { useEventType } from '../hooks/useEventType';
 import { useAvailableSlots } from '../hooks/useAvailableSlots';
@@ -11,9 +11,18 @@ import { EventInfoPanel } from '../components/EventInfoPanel';
 import { CalendarPicker } from '../components/CalendarPicker';
 import { SlotList } from '../components/SlotList';
 import { BookingForm } from '../components/BookingForm';
+import { TimezonePicker } from '../components/TimezonePicker';
 import type { AvailableSlot } from '../api';
 
 dayjs.locale('ru');
+
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 export function BookEventPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,6 +33,7 @@ export function BookEventPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [userTimezone, setUserTimezone] = useState<string>(detectTimezone);
 
   const dateStr = selectedDate ? dayjs(selectedDate).format('YYYY-MM-DD') : null;
   const { data: slots, loading: slotsLoading } = useAvailableSlots(eventTypeId, dateStr);
@@ -77,6 +87,7 @@ export function BookEventPage() {
               eventType={eventType}
               selectedDate={selectedDate}
               selectedSlot={selectedSlot}
+              userTimezone={userTimezone}
             />
             <Button
               variant="subtle"
@@ -94,6 +105,13 @@ export function BookEventPage() {
           <Paper withBorder p="md" radius="md">
             <Text fw={600} mb="md">Календарь</Text>
             <CalendarPicker value={selectedDate} onChange={handleDateChange} />
+            <Stack mt="md">
+              <TimezonePicker
+                value={userTimezone}
+                onChange={(tz) => { setUserTimezone(tz); setSelectedSlot(null); setShowForm(false); }}
+                label="Ваш часовой пояс"
+              />
+            </Stack>
           </Paper>
         </Grid.Col>
 
@@ -121,6 +139,7 @@ export function BookEventPage() {
                   loading={slotsLoading}
                   selectedSlot={selectedSlot}
                   onSelect={handleSlotSelect}
+                  userTimezone={userTimezone}
                 />
               </>
             )}

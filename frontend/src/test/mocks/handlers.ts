@@ -78,4 +78,11 @@ export const handlers = [
   }),
 
   http.delete('/api/bookings/:id', () => new HttpResponse(null, { status: 204 })),
+
+  http.get('/api/settings', () => HttpResponse.json({ ownerTimezone: 'UTC' })),
+
+  http.put('/api/settings', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+    return HttpResponse.json({ ownerTimezone: body.timezone });
+  }),
 ];
