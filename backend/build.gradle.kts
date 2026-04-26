@@ -61,6 +61,10 @@ tasks.withType<KotlinCompile> {
     }
 }
 
+tasks.withType<Test> {
+    useJUnitPlatform()
+}
+
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -75,6 +79,10 @@ dependencies {
 
     implementation("org.xerial:sqlite-jdbc:3.45.2.0")
     implementation("com.zaxxer:HikariCP:5.1.0")
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("io.mockk:mockk:1.13.10")
+    testImplementation("com.ninja-squad:springmockk:4.0.2")
 
     // Required by generated code
     implementation("io.swagger.core.v3:swagger-annotations:2.2.20")

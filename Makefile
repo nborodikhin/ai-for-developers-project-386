@@ -1,6 +1,6 @@
 .PHONY: init clean api-init api-generate \
         frontend-init frontend-generate-types frontend-lint frontend-dev frontend-dev-stop frontend-build \
-        backend-generate backend-build backend-run backend-run-stop \
+        backend-generate backend-build backend-test backend-run backend-run-stop \
         prism prism-stop stop \
         docker-up docker-down
 
@@ -67,6 +67,9 @@ backend-build: ## Build backend (codegen + compile + test)
 
 backend-run: ## Start backend in background (localhost:8082, avoids conflict with syncthing on 8080)
 	cd backend && ./gradlew bootRun --args='--server.port=8082' & echo $$! > ../$(BACKEND_PID_FILE)
+
+backend-test: ## Run backend tests
+	cd backend && ./gradlew test
 
 backend-run-stop: ## Stop background backend process
 	@if [ -f $(BACKEND_PID_FILE) ]; then \
