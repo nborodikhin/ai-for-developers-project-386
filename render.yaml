@@ -1,22 +1,8 @@
 services:
-  - name: calendar-backend
+  - name: calendar-app
     type: web
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
     healthCheckPath: /api/event-types
-
-  - name: calendar-frontend
-    type: web
-    runtime: docker
-    dockerfilePath: ./frontend/Dockerfile
-    dockerContext: .
-    plan: free
-    envVars:
-      - key: BACKEND_SCHEME
-        value: https
-      # Free-tier services don't have private networking; use full external hostname.
-      # Update this value if the backend service is recreated with a new slug.
-      - key: BACKEND_HOST
-        value: calendar-backend-3vu4.onrender.com
