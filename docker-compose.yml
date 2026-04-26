@@ -6,6 +6,12 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/event-types"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
 
   frontend:
     build:
@@ -14,5 +20,12 @@ services:
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 5s

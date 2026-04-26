@@ -1,5 +1,5 @@
 .PHONY: init clean api-init api-generate \
-        frontend-init frontend-generate-types frontend-lint frontend-dev frontend-dev-stop frontend-test frontend-build \
+        frontend-init frontend-generate-types frontend-lint frontend-dev frontend-dev-stop frontend-test frontend-e2e frontend-build \
         backend-generate backend-build backend-test backend-run backend-run-stop \
         prism prism-stop stop \
         docker-up docker-down
@@ -56,6 +56,9 @@ frontend-dev-stop: ## Stop frontend dev server
 
 frontend-test: ## Run frontend tests
 	cd frontend && npm test
+
+frontend-e2e: ## Run Playwright E2E tests (requires docker-up)
+	cd frontend && npx playwright test
 
 frontend-build: frontend-generate-types ## Build frontend for production
 	cd frontend && npm run build
