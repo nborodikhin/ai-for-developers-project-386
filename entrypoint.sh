@@ -2,16 +2,14 @@
 set -e
 
 PORT=${PORT:-80}
+export BACKEND_PORT=$((PORT + 1000))
 
-# Inject PORT into nginx config
-envsubst '${PORT}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
+envsubst '${PORT} ${BACKEND_PORT}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf
 
-# Start backend
-java -jar /app/backend.jar &
+java -jar /app/backend.jar --server.port=${BACKEND_PORT} &
 
-# Wait for backend to be ready before nginx starts accepting requests
 echo "Waiting for backend..."
-until curl -sf http://localhost:8080/api/event-types > /dev/null; do
+until curl -sf http://localhost:${BACKEND_PORT}/api/event-types > /dev/null; do
   sleep 2
 done
 echo "Backend ready"
