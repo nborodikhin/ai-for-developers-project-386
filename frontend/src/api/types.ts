@@ -7,3 +7,5 @@ export type CreateEventTypeRequest = components['schemas']['CreateEventTypeReque
 export type CreateBookingRequest = components['schemas']['CreateBookingRequest'];
 export type UpdateBookingRequest = components['schemas']['UpdateBookingRequest'];
 export type ErrorResponse = components['schemas']['ErrorResponse'];
+export type OwnerSettings = components['schemas']['OwnerSettings'];
+export type UpdateTimezoneRequest = components['schemas']['UpdateTimezoneRequest'];

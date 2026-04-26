@@ -7,7 +7,41 @@ tags:
   - name: EventTypeBookings
   - name: AvailableSlots
   - name: Bookings
+  - name: Settings
 paths:
+  /api/settings:
+    get:
+      operationId: Settings_get
+      description: Get current owner settings
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerSettings'
+      tags:
+        - Settings
+    put:
+      operationId: Settings_updateTimezone
+      description: Update owner timezone
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerSettings'
+      tags:
+        - Settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTimezoneRequest'
   /api/bookings:
     get:
       operationId: Bookings_list
@@ -372,6 +406,20 @@ components:
         durationMinutes:
           type: integer
           format: int32
+    OwnerSettings:
+      type: object
+      required:
+        - ownerTimezone
+      properties:
+        ownerTimezone:
+          type: string
+    UpdateTimezoneRequest:
+      type: object
+      required:
+        - timezone
+      properties:
+        timezone:
+          type: string
     UpdateBookingRequest:
       type: object
       properties:

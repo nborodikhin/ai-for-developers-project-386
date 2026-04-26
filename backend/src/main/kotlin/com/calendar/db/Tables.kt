@@ -24,3 +24,10 @@ object Bookings : Table("bookings") {
 
     override val primaryKey = PrimaryKey(id)
 }
+
+object Settings : Table("settings") {
+    val id       = integer("id").autoIncrement()
+    val timezone = varchar("timezone", 100).default("UTC")
+
+    override val primaryKey = PrimaryKey(id)
+}

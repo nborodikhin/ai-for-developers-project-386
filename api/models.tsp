@@ -45,3 +45,11 @@ model AvailableSlot {
 model ErrorResponse {
   message: string;
 }
+
+model OwnerSettings {
+  ownerTimezone: string;
+}
+
+model UpdateTimezoneRequest {
+  timezone: string;
+}

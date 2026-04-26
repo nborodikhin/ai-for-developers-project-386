@@ -1,19 +1,20 @@
 import { Stack, Button, Badge, Group, Text, Loader, Center } from '@mantine/core';
 import type { AvailableSlot } from '../api';
-import dayjs from 'dayjs';
+import dayjs from '../lib/dayjs';
 
 interface Props {
   slots: AvailableSlot[];
   loading: boolean;
   selectedSlot: AvailableSlot | null;
   onSelect: (slot: AvailableSlot) => void;
+  userTimezone: string;
 }
 
-function formatTime(iso: string) {
-  return dayjs(iso).format('HH:mm');
+function formatTime(iso: string, tz: string) {
+  return dayjs(iso).tz(tz).format('HH:mm');
 }
 
-export function SlotList({ slots, loading, selectedSlot, onSelect }: Props) {
+export function SlotList({ slots, loading, selectedSlot, onSelect, userTimezone }: Props) {
   if (loading) {
     return (
       <Center h={120}>
@@ -33,7 +34,7 @@ export function SlotList({ slots, loading, selectedSlot, onSelect }: Props) {
   return (
     <Stack gap="xs">
       {slots.map((slot) => {
-        const label = `${formatTime(slot.startTime)} — ${formatTime(slot.endTime)}`;
+        const label = `${formatTime(slot.startTime, userTimezone)} — ${formatTime(slot.endTime, userTimezone)}`;
         const isSelected = selectedSlot?.startTime === slot.startTime;
 
         if (!slot.available) {

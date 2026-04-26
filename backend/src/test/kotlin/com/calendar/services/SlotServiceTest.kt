@@ -2,8 +2,10 @@ package com.calendar.services
 
 import com.calendar.db.Bookings
 import com.calendar.db.EventTypes
+import com.calendar.db.Settings
 import com.calendar.generated.model.CreateBookingRequest
 import com.calendar.generated.model.CreateEventTypeRequest
+import com.calendar.generated.model.UpdateTimezoneRequest
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.junit.jupiter.api.Assertions.*
@@ -23,6 +25,7 @@ class SlotServiceTest {
     @Autowired lateinit var slotService: SlotService
     @Autowired lateinit var bookingService: BookingService
     @Autowired lateinit var eventTypeService: EventTypeService
+    @Autowired lateinit var settingsService: SettingsService
 
     private val testDate = LocalDate.of(2026, 5, 15)
     private val dayStart = OffsetDateTime.of(2026, 5, 15, 9, 0, 0, 0, ZoneOffset.UTC)
@@ -32,6 +35,7 @@ class SlotServiceTest {
         transaction {
             Bookings.deleteAll()
             EventTypes.deleteAll()
+            Settings.update { it[timezone] = "UTC" }
         }
     }
 
@@ -59,7 +63,7 @@ class SlotServiceTest {
     }
 
     @Test
-    fun `first slot starts at 09h00 UTC`() {
+    fun `first slot starts at 09h00 UTC when owner timezone is UTC`() {
         val et = eventTypeService.create(CreateEventTypeRequest("T", "", 30))
         val slots = slotService.getSlots(et.id, testDate)!!
         assertEquals(dayStart, slots.first().startTime)
@@ -113,8 +117,6 @@ class SlotServiceTest {
         )
 
         val slots = slotService.getSlots(et.id, testDate)!!
-
-        // Slot before (N/A — first slot) and after should be available
         val slot0930 = slots.find { it.startTime == dayStart.plusMinutes(30) }
         assertNotNull(slot0930)
         assertTrue(slot0930!!.available)
@@ -126,5 +128,17 @@ class SlotServiceTest {
         val et = eventTypeService.create(CreateEventTypeRequest("T", "", 10 * 60))
         val slots = slotService.getSlots(et.id, testDate)!!
         assertEquals(0, slots.size)
+    }
+
+    @Test
+    fun `owner timezone UTC+3 shifts work window to UTC+0 equivalent`() {
+        // Moscow is UTC+3, so 9:00 Moscow = 06:00 UTC, 18:00 Moscow = 15:00 UTC
+        settingsService.updateTimezone(UpdateTimezoneRequest(timezone = "Europe/Moscow"))
+        val et = eventTypeService.create(CreateEventTypeRequest("T", "", 30))
+        val slots = slotService.getSlots(et.id, testDate)!!
+        assertNotNull(slots)
+        assertEquals(18, slots.size)
+        val expectedStart = OffsetDateTime.of(2026, 5, 15, 6, 0, 0, 0, ZoneOffset.UTC)
+        assertEquals(expectedStart, slots.first().startTime)
     }
 }
