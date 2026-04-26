@@ -12,6 +12,7 @@ COPY frontend/ .
 RUN npm run build
 
 FROM nginx:1.25-alpine
+RUN apk add --no-cache curl
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf.template
 ENV BACKEND_SCHEME=http

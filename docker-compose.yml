@@ -7,7 +7,7 @@ services:
       dockerfile: backend/Dockerfile
     restart: on-failure
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/event-types"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:8080/api/event-types"]
       interval: 10s
       timeout: 5s
       retries: 6
@@ -24,7 +24,7 @@ services:
         condition: service_healthy
     restart: on-failure
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80"]
+      test: ["CMD", "curl", "-f", "http://localhost/"]
       interval: 5s
       timeout: 3s
       retries: 6
